@@ -268,6 +268,46 @@ backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);margin:2px 0}
 .log .new{animation:logIn .3s}
 @keyframes logIn{from{opacity:.3}to{opacity:1}}
 .log .hit{color:var(--gold)}.log .ai{color:#d6407f}
+/* 縦が短い実機画面(Safari UIバー分)向けコンパクト化 */
+@media (max-height:760px){
+ header{padding:5px 6px 7px}
+ #brand{width:26px;height:26px}
+ .track{padding:5px 8px 4px;margin:1px 0 2px}
+ .side{padding:5px 3px}
+ .field{min-height:132px;margin:2px 0}
+ .rune{width:220px;height:220px;margin:-110px 0 0 -110px}
+ .log{height:3.1em;padding:5px 9px;margin:1px 0}
+ .art{height:100px}
+ .art img{bottom:9px}
+ .gl,.beam{bottom:9px}
+ .sd{bottom:6px}
+ .pw{font-size:34px}
+ .card{width:126px}
+ .handRow{padding:5px 2px 6px;gap:6px}
+ .hint{padding:0 2px 3px;font-size:9.5px}
+ .ctrl{padding:0 2px 7px}
+ .ctrl button{padding:10px 6px}
+}
+/* さらに小型の端末(iPhone SE等)向け */
+@media (max-height:620px){
+ header{padding:3px 6px 5px}
+ h1{font-size:14px}
+ .track{padding:4px 8px 3px;margin:0}
+ .side{padding:3px 3px}
+ .field{min-height:80px}
+ .rune{width:170px;height:170px;margin:-85px 0 0 -85px}
+ .log{height:2.2em;padding:4px 9px}
+ .art{height:78px}
+ .pw{font-size:28px}
+ .card{width:118px}
+ .info{padding:3px 6px 5px}
+ .ef{font-size:8.5px}
+ .meta{font-size:8.5px;margin-top:1px}
+ .handRow{padding:4px 2px 5px}
+ .hint{padding:0 2px 2px;min-height:1.2em}
+ .ctrl{padding:0 2px 5px}
+ .ctrl button{padding:8px 6px}
+}
 .handRow{display:flex;gap:7px;overflow-x:auto;padding:7px 2px 9px;scrollbar-width:none;
 overscroll-behavior-x:contain;touch-action:pan-x}
 .handRow::-webkit-scrollbar{display:none}
@@ -319,6 +359,15 @@ color:transparent}
 .picks.grid2 .fp b{font-size:15px;letter-spacing:.1em;margin-bottom:4px}
 .fp small{font-size:10px;color:var(--dim);line-height:1.55;display:block;margin-top:2px}
 .picks.grid2 .fp small{font-size:9.5px;line-height:1.5}
+@media (max-height:620px){
+ .screen.title-scr{gap:6px;padding:4px 2px}
+ .screen.title-scr h2{font-size:15px;margin:0}
+ .screen.title-scr p{font-size:9.5px;line-height:1.45;margin:0}
+ .picks.grid2{gap:6px}
+ .picks.grid2 .fp{padding:8px 6px;border-top-width:2px}
+ .picks.grid2 .fp b{font-size:13px;margin-bottom:2px}
+ .picks.grid2 .fp small{font-size:8.5px;line-height:1.35}
+}
 .pack{display:flex;gap:7px;overflow-x:auto;padding:4px 2px;scrollbar-width:none}
 .pack::-webkit-scrollbar{display:none}
 .skips{display:flex;gap:7px}
