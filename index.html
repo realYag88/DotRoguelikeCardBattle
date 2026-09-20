@@ -357,6 +357,27 @@ box-shadow:0 8px 18px rgba(0,0,0,.55),0 0 16px rgba(217,180,69,.22),inset 0 1px 
 background:linear-gradient(180deg,#fff6df,#d9b445);-webkit-background-clip:text;background-clip:text;
 color:transparent}
 .picks.grid2 .fp b{font-size:15px;letter-spacing:.1em;margin-bottom:4px}
+.chests{display:flex;flex-direction:column;gap:8px}
+.chest{display:block;width:100%;text-align:left;cursor:pointer;color:var(--ink);padding:8px 10px 9px;
+  border:1px solid rgba(47,58,95,.9);border-left:4px solid #8a90a0;
+  background:linear-gradient(180deg,rgba(34,43,76,.92),rgba(16,21,40,.92));
+  box-shadow:0 3px 10px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.07);transition:transform .16s,border-color .16s}
+.chest:hover,.chest:focus-visible{transform:translateY(-2px);border-color:rgba(217,180,69,.75)}
+.chest.kB{border-left-color:#4d8fd6}
+.chest.kC{border-left-color:var(--gold);box-shadow:0 3px 10px rgba(0,0,0,.45),0 0 10px rgba(217,180,69,.28),inset 0 1px 0 rgba(255,255,255,.07)}
+.chHd{display:flex;align-items:baseline;gap:8px;margin-bottom:6px}
+.chHd b{font-family:var(--mincho);font-size:14px;letter-spacing:.12em}
+.chest.kB .chHd b{color:#8fc7ff}.chest.kC .chHd b{color:#f3d36b}
+.chHd span{font-size:10px;color:var(--dim)}
+.chHd em{margin-left:auto;font-style:normal;font-size:10.5px;color:#8fe08a}
+.chIn{display:flex;gap:6px}
+.mini{flex:1 1 0;min-width:0;display:flex;align-items:center;gap:5px;background:rgba(0,0,0,.25);padding:3px 5px 3px 3px}
+.mArt{flex:0 0 36px;height:36px;display:flex;align-items:center;justify-content:center}
+.mArt img{image-rendering:pixelated}
+.mTx{min-width:0}
+.mTx i{display:block;font-style:normal;font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mTx small{display:flex;align-items:center;gap:2px;font-size:9px;color:var(--dim);white-space:nowrap}
+.mTx small img{width:11px;height:11px}
 .fp small{font-size:10px;color:var(--dim);line-height:1.55;display:block;margin-top:2px}
 .picks.grid2 .fp small{font-size:9.5px;line-height:1.5}
 @media (max-height:620px){
@@ -492,7 +513,7 @@ const FLOORS=5,MAXLIFE=24,OPPLIFE=[14,16,18,20,28];
 const $=i=>document.getElementById(i);
 const sh=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 const rnd=a=>a[Math.random()*a.length|0];
-let uid=0,codex={},best=0,screen="title",R=null,B=null,pack=null,psel=null,events=[];
+let uid=0,codex={},best=0,offer=null,chests=null,csel=null,screen="title",R=null,B=null,pack=null,psel=null,events=[];
 const SAVE_KEY="kaidan-janken-save-v1";
 let saveOK=true;
 function saveGame(){
@@ -542,6 +563,28 @@ function scrollable(el,key){
   el.addEventListener("pointerup",up);el.addEventListener("pointerleave",up);
 }
 const inst=b=>({...b,cur:b.p,wear:0,uid:++uid});
+/* ---- 宝箱 ---- */
+const AUTOHEAL=0.3; // 戦闘勝利時の自動回復（最大ライフに対する割合）
+const CHEST={A:{q:"並",n:3,heal:20,name:"並の箱",note:"3枚から1枚"},
+             B:{q:"稀",n:2,heal:10,name:"稀の箱",note:"2枚から1枚"},
+             C:{q:"極",n:1,heal:5, name:"極の箱",note:"この1枚を得る"}};
+// 出現率: 1戦目の後 → 4戦目の後 を線形に変化
+const CH_FIRST={A:60,B:30,C:10},CH_LAST={A:25,B:35,C:40};
+function chestRates(fl){const t=Math.min(1,Math.max(0,(fl-1)/(FLOORS-2)));
+  const r={};for(const k in CH_FIRST)r[k]=CH_FIRST[k]+(CH_LAST[k]-CH_FIRST[k])*t;return r;}
+function rollChestKind(fl){const r=chestRates(fl);let x=Math.random()*100;
+  for(const k of ["A","B","C"]){if((x-=r[k])<0)return k}return "A";}
+function makeChests(){
+  return Array.from({length:3},()=>{
+    const k=rollChestKind(R.floor),def=CHEST[k];
+    let src=POOL.filter(c=>c.r===R.race&&c.q===def.q);
+    if(!src.length)src=POOL.filter(c=>c.q===def.q);
+    const u=sh(src.slice()),cards=[];
+    for(let i=0;i<def.n;i++)cards.push(u[i]||rnd(src));
+    cards.forEach(see);
+    return {k,cards};
+  });
+}
 const see=b=>{codex[b.n]=(codex[b.n]||0)+1;saveGame();};
 
 /* ---- 編成（検証用）: 任意の構成でランを開始 ---- */
@@ -556,21 +599,24 @@ function startCustomRun(){
 }
 
 function startRun(race){
-  const deck=[];
-  // テーマ7枚: 回復1枚を確保したうえで、同種族から重複を避けて埋める
-  const ownPool=POOL.filter(c=>c.r===race&&c.p<=7);
-  const heal=sh(POOL.filter(c=>c.r===race&&isHeal(c)))[0]||sh(POOL.filter(isHeal))[0];
-  const seen=new Set();
-  if(heal){deck.push(heal);seen.add(heal.n);}
-  for(const c of sh((ownPool.length?ownPool:POOL).slice())){
-    if(deck.length>=7)break;
-    if(!seen.has(c.n)){deck.push(c);seen.add(c.n);}
+  offer=null;
+  let src=POOL.filter(c=>c.r===race&&c.q==="並"&&c.p<=7);
+  if(!src.length)src=POOL.filter(c=>c.r===race);
+  const deck=[],seen=new Set();
+  const add=c=>{deck.push(c);seen.add(c.n)};
+  const pickFrom=a=>{const u=sh(a.filter(c=>!seen.has(c.n)));return u[0]||rnd(a)};
+  // 回復1枚
+  const heals=src.filter(isHeal);
+  if(heals.length)add(pickFrom(heals));
+  // グー・チョキ・パーを最低2枚ずつ（足りなければ重複を許す）
+  for(const h of ["石","鋏","紙"]){
+    const hs=src.filter(c=>c.h===h);if(!hs.length)continue;
+    while(deck.filter(c=>c.h===h).length<2)add(pickFrom(hs));
   }
-  // 同種族の枚数が足りない場合は同種族から重複を許して7枚に揃える
-  while(deck.length<7)deck.push(rnd(ownPool.length?ownPool:POOL));
-  // 残り3枚: ランダム（低〜中パワー寄り）
-  const fill=POOL.filter(c=>c.p<=6);
-  while(deck.length<10)deck.push(rnd(fill));
+  while(deck.length<8)add(pickFrom(src));
+  // 他種族から並か稀を2枚
+  const other=POOL.filter(c=>c.r!==race&&(c.q==="並"||c.q==="稀"));
+  for(let i=0;i<2;i++)deck.push(rnd(other));
   deck.forEach(see);
   R={race,deck,life:MAXLIFE,floor:1};
   startBattle();
@@ -698,9 +744,9 @@ function end(){
     if(!win){best=Math.max(best,R.floor);saveGame();screen="over";render();return}
     R.life=B.p.life;
     if(R.floor>=FLOORS){best=FLOORS;saveGame();screen="clear";render();return}
-    R.heal=Math.min(MAXLIFE,R.life+Math.ceil(MAXLIFE*0.5))-R.life;
+    R.heal=Math.min(MAXLIFE,R.life+Math.ceil(MAXLIFE*AUTOHEAL))-R.life;
     R.life+=R.heal;
-    pack=Array.from({length:5},()=>rnd(POOL));pack.forEach(see);psel=null;screen="loot";render();
+    chests=makeChests();csel=null;psel=null;screen="loot";render();
   });
   return true;
 }
@@ -757,23 +803,39 @@ const stuck=()=>!B.field&&!canOpen("p");
 
 function render(){const b=$("body");
  if(screen==="title"){
+  if(!offer)offer=sh(STARTERS.slice()).slice(0,3);
   b.innerHTML=`<div class="screen title-scr"><h2>召　喚　術　選　択</h2>
-   <p>選んだ種族から7枚（回復1枚を含む）に、<br>ランダムな3枚を加えた10枚で始まります。<br>5戦勝ち抜けば踏破。負ければそこで終わり。</p>
-   <div class="picks grid2">${STARTERS.map(([r,d])=>`<button class="fp" data-r="${r}"><b>${r}</b><small>${d}</small></button>`).join("")}</div>
+   <p>選んだ種族の8枚に、<br>他種族の2枚を加えた10枚で始まります。<br>5戦勝ち抜けば踏破。負ければそこで終わり。</p>
+   <div class="picks">${offer.map(([r,d])=>`<button class="fp" data-r="${r}"><b>${r}</b><small>${d}</small></button>`).join("")}</div>
    ${best?`<p style="font-family:var(--mono)">最高到達 ${best} 階</p>`:""}</div>`;
   [...b.querySelectorAll(".fp")].forEach(e=>e.onclick=()=>startRun(e.dataset.r));return}
+ if(screen==="loot"&&csel===null){
+  const heal=R.heal?`<p style="color:#8fe08a;font-size:11px">戦闘に勝利 ライフ +${R.heal} 回復</p>`:"";
+  b.innerHTML=`<div class="screen">${track()}<h2>宝　箱</h2>${heal}
+   <p>ひとつ選んで開けてください。</p>
+   <div class="chests">${chests.map((ch,i)=>{const d=CHEST[ch.k];
+     return `<button class="chest k${ch.k}" data-i="${i}">
+      <div class="chHd"><b>${d.name}</b><span>${d.note}</span><em>ライフ +${d.heal}</em></div>
+      <div class="chIn">${ch.cards.map(c=>{const s=Math.min(1,34/Math.max(c.w,c.ht));
+        return `<div class="mini"><div class="mArt"><img src="${c.img}" style="width:${c.w*s}px;height:${c.ht*s}px"></div>
+         <div class="mTx"><i>${c.n}</i><small><img src="${ICON[c.h]}">力${c.p}・費${c.c}</small></div></div>`}).join("")}</div>
+     </button>`}).join("")}</div>
+   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${MAXLIFE}</p></div>`;
+  [...b.querySelectorAll(".chest")].forEach(e=>e.onclick=()=>{csel=+e.dataset.i;psel=chests[csel].cards.length===1?0:null;SCROLL.pack=0;render()});
+  return}
  if(screen==="loot"){
-  b.innerHTML=`<div class="screen">${track()}<h2>戦　利　品</h2>
-   ${R.heal?`<p style="color:#8fe08a;font-size:11px">戦闘に勝利 ライフ +${R.heal} 回復</p>`:""}
-   <p>5枚すべて図鑑に記録されます。加えられるのは1枚だけ。</p>
-   <div class="pack">${pack.map((c,i)=>cardHTML({...c,i},psel===i?"sel":"")).join("")}</div>
-   <div class="ctrl"><button class="go" id="bT" ${psel===null?"disabled":""}>デッキに加える</button></div>
-   <div class="skips"><button id="bSkip">加えず進む</button></div>
+  const ch=chests[csel],d=CHEST[ch.k];
+  b.innerHTML=`<div class="screen">${track()}<h2>${d.name.split("").join("　")}</h2>
+   <p>${ch.cards.length>1?"デッキに加える1枚を選んでください。":"この札がデッキに加わります。"}<br>ライフ +${d.heal}</p>
+   <div class="pack">${ch.cards.map((c,i)=>cardHTML({...c,i},psel===i?"sel":"")).join("")}</div>
+   <div class="ctrl"><button class="go" id="bT" ${psel===null?"disabled":""}>受け取る</button></div>
+   <div class="skips"><button id="bBack">箱を選び直す</button></div>
    <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${MAXLIFE}</p></div>`;
   scrollable(b.querySelector(".pack"),"pack");
   [...b.querySelectorAll(".pack .card")].forEach(e=>e.onclick=()=>{if(!dragged){psel=+e.dataset.i;render()}});
-  $("bT").onclick=()=>{R.deck.push(pack[psel]);toEvent()};
-  $("bSkip").onclick=()=>{toEvent()};return}
+  $("bT").onclick=()=>{R.deck.push(ch.cards[psel]);R.life=Math.min(MAXLIFE,R.life+d.heal);
+    chests=null;csel=null;psel=null;R.floor++;startBattle()};
+  $("bBack").onclick=()=>{csel=null;psel=null;render()};return}
  if(screen==="event"){
   const EV={shop:["行　商","カードを1枚もらってデッキに加える"],
             cull:["破　棄","デッキから1枚を取り除く"],
