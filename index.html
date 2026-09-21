@@ -782,7 +782,7 @@ function finisher(win, done){
   label.textContent=win?"撃　破":"敗　北";
   label.className="finishLabel "+(win?"win":"lose");
   ov.className="finish show "+(win?"win":"lose");
-  if(reduce){ setTimeout(done,300); return; }
+  if(reduce){ setTimeout(()=>{ ov.className="finish"; done(); },300); return; }
   // 最後の一撃を見せる余白 → オーバーレイ演出 → 結果
   setTimeout(()=>{ ov.classList.add("burst"); }, 520);
   setTimeout(()=>{ ov.className="finish"; done(); }, 1850);
