@@ -133,6 +133,9 @@ text-shadow:0 1px 2px rgba(0,0,0,.6)}
 .meta{font-family:var(--mono);font-size:9.5px;color:var(--dim);margin-top:4px;padding-left:1px;letter-spacing:.02em}
 .rallyOn{color:#1a1710;background:linear-gradient(180deg,#ffd9c4,#ff9a6c);padding:1px 6px;border-radius:8px;
   font-weight:700;box-shadow:0 0 8px rgba(255,140,90,.5)}
+.endInfo{font-size:11px;line-height:1.6;text-align:center;margin:4px 0 0}
+.result .skips{margin-top:8px}
+.track.endless span:first-child{color:#ff9a6c}
 .discOn{color:#1a1710;background:linear-gradient(180deg,#fff3cf,var(--gold));padding:1px 6px;border-radius:8px;
 font-weight:700;letter-spacing:.04em;box-shadow:0 0 6px rgba(217,180,69,.6)}
 .side{padding:8px 3px;position:relative;border-radius:10px}
@@ -512,15 +515,18 @@ const STARTERS=[["獣族","群れをなす野の獣たち。数の力で敵を�
 ["不死族","墓所より甦る亡者たち。滅んでもなお立ち上がる"],
 ["植物族","大地に根差す精霊たち。芽吹きは尽きることなし"]];
 const FLOORS=5,MAXLIFE=24,OPPLIFE=[14,16,18,20,28];
+// エンドレス: 6戦目以降は1〜5戦目のルールを繰り返し、体力は1戦ごとに+2
+const cyc=fl=>((fl-1)%FLOORS)+1;
+const oppLife=fl=>fl<=FLOORS?OPPLIFE[fl-1]:OPPLIFE[FLOORS-1]+2*(fl-FLOORS);
 const $=i=>document.getElementById(i);
 const sh=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 const rnd=a=>a[Math.random()*a.length|0];
-let uid=0,codex={},best=0,offer=null,chests=null,csel=null,screen="title",R=null,B=null,pack=null,psel=null,events=[];
+let uid=0,codex={},best=0,bestEnd=0,offer=null,chests=null,csel=null,screen="title",R=null,B=null,pack=null,psel=null,events=[];
 const SAVE_KEY="kaidan-janken-save-v1";
 let saveOK=true;
 function saveGame(){
   try{
-    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1,codex,best}));
+    localStorage.setItem(SAVE_KEY, JSON.stringify({v:1,codex,best,bestEnd}));
   }catch(e){ saveOK=false; }
 }
 function loadGame(){
@@ -530,18 +536,19 @@ function loadGame(){
     const d=JSON.parse(raw);
     if(d&&d.codex)codex=d.codex;
     if(d&&typeof d.best==="number")best=d.best;
+    if(d&&typeof d.bestEnd==="number")bestEnd=d.bestEnd;
   }catch(e){ saveOK=false; }
 }
 function exportSave(){
   // 図鑑と最高到達を文字列化（Base64）。バックアップ・移行用。
-  try{ return btoa(unescape(encodeURIComponent(JSON.stringify({v:1,codex,best})))); }
+  try{ return btoa(unescape(encodeURIComponent(JSON.stringify({v:1,codex,best,bestEnd})))); }
   catch(e){ return ""; }
 }
 function importSave(str){
   try{
     const d=JSON.parse(decodeURIComponent(escape(atob(str.trim()))));
     if(!d||!d.codex)throw 0;
-    codex=d.codex; best=(typeof d.best==="number")?d.best:0;
+    codex=d.codex; best=(typeof d.best==="number")?d.best:0; bestEnd=(typeof d.bestEnd==="number")?d.bestEnd:0;
     saveGame(); return true;
   }catch(e){ return false; }
 }
@@ -574,7 +581,7 @@ const CHEST={A:{q:"並",n:3,take:2,heal:20,name:"並の箱",note:"3枚から2枚
 const CH_FIRST={A:70,B:25,C:5},CH_LAST={A:30,B:40,C:30};
 // 一番良い箱より下の箱が何で埋まるかの重み
 const CH_FILL={B:{A:75,B:25},C:{A:65,B:35}};
-function chestRates(fl){const t=Math.min(1,Math.max(0,(fl-1)/(FLOORS-2)));
+function chestRates(fl){fl=cyc(fl);const t=Math.min(1,Math.max(0,(fl-1)/(FLOORS-2)));
   const r={};for(const k in CH_FIRST)r[k]=CH_FIRST[k]+(CH_LAST[k]-CH_FIRST[k])*t;return r;}
 function pickW(w){let t=0;for(const k in w)t+=w[k];let x=Math.random()*t;
   for(const k in w){if((x-=w[k])<0)return k}return Object.keys(w)[0];}
@@ -628,10 +635,11 @@ function startRun(race){
   const other=POOL.filter(c=>c.r!==race&&(c.q==="並"||c.q==="稀"));
   for(let i=0;i<2;i++)deck.push(rnd(other));
   deck.forEach(see);
-  R={race,deck,life:MAXLIFE,floor:1};
+  R={race,deck,life:MAXLIFE,floor:1,endless:false};
   startBattle();
 }
 function oppDeck(fl){
+  fl=cyc(fl);
   let src=POOL;
   if(fl===FLOORS){const r=rnd([...new Set(POOL.map(c=>c.r))].filter(x=>x!==R.race));
     src=POOL.filter(c=>c.r===r);}
@@ -640,12 +648,12 @@ function oppDeck(fl){
 }
 function startBattle(){
   B={p:{life:R.life,deck:sh(R.deck.map(inst)),hand:[],grave:[],disc:0},
-     o:{life:OPPLIFE[R.floor-1],deck:oppDeck(R.floor),hand:[],grave:[],disc:0},
+     o:{life:oppLife(R.floor),deck:oppDeck(R.floor),hand:[],grave:[],disc:0},
      field:null,sel:null,pay:[],busy:false,log:[],logDirty:false,fx:[],toast:null,beamP:false,beamO:false,
      stat:{turn:0,aiko:0,max:0,reset:0,t0:Date.now()}};
   SCROLL.hand=0;SCROLL.pack=0;
   draw("p",5);draw("o",5);
-  say(R.floor===FLOORS?"最終戦。相手は単一種族に偏っている":"初手のみ同時。以降は勝ち残り");
+  say(cyc(R.floor)===FLOORS?(R.floor===FLOORS?"最終戦。相手は単一種族に偏っている":"強敵。相手は単一種族に偏っている"):"初手のみ同時。以降は勝ち残り");
   screen="battle";render();
 }
 function draw(s,n){const d=B[s];for(let i=0;i<n;i++){
@@ -755,9 +763,10 @@ function end(){
   B.busy=true;
   const win=B.o.life<=0;
   finisher(win, ()=>{
-    if(!win){best=Math.max(best,R.floor);saveGame();screen="over";render();return}
+    if(!win){if(R.endless)bestEnd=Math.max(bestEnd,R.floor);else best=Math.max(best,R.floor);
+      saveGame();screen="over";render();return}
     R.life=B.p.life;
-    if(R.floor>=FLOORS){best=FLOORS;saveGame();screen="clear";render();return}
+    if(R.floor===FLOORS&&!R.endless){best=FLOORS;saveGame();screen="clear";render();return}
     R.heal=Math.min(MAXLIFE,R.life+Math.ceil(MAXLIFE*AUTOHEAL))-R.life;
     R.life+=R.heal;
     chests=makeChests();csel=null;psel=null;screen="loot";render();
@@ -808,7 +817,9 @@ function cardHTML(c,ex="",box=126,flip=false,summon=false){
    <div class="info"><div class="rc">${c.r}</div><div class="nm" style="font-size:${nameSize(c.n)}px">${c.n}</div>
    <div class="ef">${effTag(c.e)}</div></div></div>`;
 }
-const track=()=>`<div class="track"><span>階層</span>`+
+const track=()=>R.endless?`<div class="track endless"><span>無限</span>`+
+  Array.from({length:FLOORS},(_,i)=>`<i class="${i+1===FLOORS?'boss':''} ${i+1<cyc(R.floor)?'done':''}"></i>`).join("")+
+  `<span>${R.floor}戦目</span></div>`:`<div class="track"><span>階層</span>`+
   Array.from({length:FLOORS},(_,i)=>`<i class="${i+1===FLOORS?'boss':''} ${i+1<R.floor?'done':''}"></i>`).join("")+
   `<span>${R.floor}/${FLOORS}</span></div>`;
 const able=c=>B.p.hand.filter(x=>x.uid!==c.uid).length>=cost("p",c);
@@ -817,11 +828,11 @@ const stuck=()=>!B.field&&!canOpen("p");
 
 function render(){const b=$("body");
  if(screen==="title"){
-  if(!offer)offer=sh(STARTERS.slice()).slice(0,3);
+  if(!offer)offer=sh(STARTERS.slice()).slice(0,6);
   b.innerHTML=`<div class="screen title-scr"><h2>召　喚　術　選　択</h2>
    <p>選んだ種族の8枚に、<br>他種族の2枚を加えた10枚で始まります。<br>5戦勝ち抜けば踏破。負ければそこで終わり。</p>
-   <div class="picks">${offer.map(([r,d])=>`<button class="fp" data-r="${r}"><b>${r}</b><small>${d}</small></button>`).join("")}</div>
-   ${best?`<p style="font-family:var(--mono)">最高到達 ${best} 階</p>`:""}</div>`;
+   <div class="picks grid2">${offer.map(([r,d])=>`<button class="fp" data-r="${r}"><b>${r}</b><small>${d}</small></button>`).join("")}</div>
+   ${best?`<p style="font-family:var(--mono)">最高到達 ${best} 階${bestEnd?` / エンドレス最高 ${bestEnd} 戦目`:""}</p>`:""}</div>`;
   [...b.querySelectorAll(".fp")].forEach(e=>e.onclick=()=>startRun(e.dataset.r));return}
  if(screen==="loot"&&csel===null){
   const heal=R.heal?`<p style="color:#8fe08a;font-size:11px">戦闘に勝利 ライフ +${R.heal} 回復</p>`:"";
@@ -896,19 +907,27 @@ function render(){const b=$("body");
   $("bBack").onclick=()=>{psel=null;screen="event";render()};return}
  if(screen==="over"||screen==="clear"){const s=B.stat;
   b.innerHTML=`<div class="screen result ornate"><h2>${screen==="clear"?"踏　破":"終　焉"}</h2>
-   <div class="stat"><span>到達階層</span><b>${R.floor} / ${FLOORS}</b></div>
+   <div class="stat"><span>${R.endless?"エンドレス 到達":"到達階層"}</span><b>${R.endless?R.floor+" 戦目":R.floor+" / "+FLOORS}</b></div>
+   ${R.endless?`<div class="stat"><span>エンドレス 最高</span><b>${bestEnd} 戦目</b></div>`:""}
    <div class="stat"><span>召喚術</span><b>${R.race}</b></div>
    <div class="stat"><span>最終デッキ</span><b>${R.deck.length} 枚</b></div>
    <div class="stat"><span>この戦闘のターン数</span><b>${s.turn}</b></div>
    <div class="stat"><span>あいこ発生率</span><b>${s.turn?Math.round(s.aiko/s.turn*100):0} %</b></div>
    <div class="stat"><span>最長の居座り</span><b>${s.max} 連勝</b></div>
    <div class="stat"><span>図鑑</span><b>${Object.keys(codex).length} / ${POOL.length}</b></div>
-   <div class="ctrl"><button class="go" id="bA">もう一度</button></div></div>`;
-  $("bA").onclick=()=>{screen="title";render()};return}
+   ${screen==="clear"?`<p class="endInfo">エンドレスに挑むと、強敵が果てしなく現れる。<br>相手の体力は1戦ごとに増えていく。</p>
+   <div class="ctrl"><button class="go" id="bE">エンドレスに挑む</button></div>
+   <div class="skips"><button id="bA">ここで終える</button></div>`
+   :`<div class="ctrl"><button class="go" id="bA">もう一度</button></div>`}</div>`;
+  $("bA").onclick=()=>{screen="title";render()};
+  if($("bE"))$("bE").onclick=()=>{R.endless=true;bestEnd=Math.max(bestEnd,FLOORS);saveGame();
+    R.heal=Math.min(MAXLIFE,R.life+Math.ceil(MAXLIFE*AUTOHEAL))-R.life;R.life+=R.heal;
+    chests=makeChests();csel=null;psel=null;screen="loot";render()};
+  return}
  const f=B.field,can=!B.busy&&(!f||f.owner==="o"),sel=B.p.hand.find(c=>c.uid===B.sel);
  b.innerHTML=`${track()}
   <div class="side" id="sdO"><div class="lifeRow"><span class="who">相手</span>
-   <span class="bar op"><i style="transform:scaleX(${Math.max(0,B.o.life)/OPPLIFE[R.floor-1]})"></i></span>
+   <span class="bar op"><i style="transform:scaleX(${Math.max(0,B.o.life)/oppLife(R.floor)})"></i></span>
    <span class="num">${Math.max(0,B.o.life)}</span></div>
    <div class="meta">手札 ${B.o.hand.length} / 山 ${B.o.deck.length} / 墓 ${B.o.grave.length}</div></div>
   <div class="field ornate">
