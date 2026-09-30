@@ -438,11 +438,33 @@ border:1px solid var(--line);border-radius:2px;font-size:12px;font-family:inheri
 .ce.pick:hover{border-color:var(--gold)}
 .ce .cnt{font-family:var(--mono);font-size:9px;color:var(--gold);margin-left:auto;padding-left:4px}
 .ce small{display:block;font-family:var(--mono);font-size:9px;color:var(--dim)}
+/* ---- 墓地・デバッグ ---- */
+.gvBtn{all:unset;cursor:pointer;color:var(--ink);border-bottom:1px dotted var(--dim);padding:0 1px;font:inherit}
+.gvBtn:hover,.gvBtn:focus-visible{color:var(--gold);border-bottom-color:var(--gold)}
+.gxList .ce small .hi{width:11px;height:11px;vertical-align:-2px;margin-right:2px}
+.gxList .ce b.up{color:#8fe08a;font-weight:700}
+.gxList .ce b.down{color:#ff9a8a;font-weight:700}
+.gxList .ce small.ge{font-family:inherit;margin-top:2px}
+#bDbg.on{background:linear-gradient(180deg,#ff9a6c,#c0392b);color:#fff;border-color:#ff9a6c}
+.screen.title-scr p.dbgNote{font-size:10.5px;color:#ff9a6c}
+.dbgRow{display:flex;align-items:center;gap:4px;margin-top:4px}
+.dbgRow span{font-family:var(--mono);font-size:9px;color:#ff9a6c;margin-right:2px}
+.dbgBtn{flex:0 0 auto;padding:3px 7px;font-size:10px;font-family:var(--mono);border-color:rgba(255,154,108,.6)}
+.dbgHand{display:flex;gap:4px;overflow-x:auto;margin-top:4px;scrollbar-width:none}
+.dbgHand::-webkit-scrollbar{display:none}
+.dbgNone{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.oh{flex:0 0 auto;display:flex;align-items:center;gap:3px;padding:2px 5px 2px 2px;width:84px;
+  background:rgba(0,0,0,.3);border:1px solid rgba(255,154,108,.35)}
+.ohArt{flex:0 0 auto;image-rendering:pixelated}
+.ohTx{min-width:0}
+.ohTx i{display:block;font-style:normal;font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ohTx small{display:flex;align-items:center;gap:2px;font-family:var(--mono);font-size:9px;color:var(--ink)}
+.ohTx small img{width:10px;height:10px}
 .hidden{display:none}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style></head><body>
 <div id="app">
-  <header><h1><img id="brand" src="" alt=""><span class="ttl">サモンカード</span></h1><span><button class="link" id="bEdit">編成</button><button class="link" id="bC">図鑑</button></span></header>
+  <header><h1><img id="brand" src="" alt=""><span class="ttl">サモンカード</span></h1><span><button class="link" id="bDbg">デバッグ</button><button class="link" id="bEdit">編成</button><button class="link" id="bC">図鑑</button></span></header>
   <div id="body"></div>
 </div>
 <div id="vg"></div>
@@ -462,6 +484,12 @@ border:1px solid var(--line);border-radius:2px;font-size:12px;font-family:inheri
     <p class="saveMsg" id="saveMsg"></p>
   </div>
   <button id="bX">閉じる</button>
+</div></div>
+<div class="cx hidden" id="gx"><div class="in">
+  <h2 id="gxTitle" style="font-family:var(--mincho);letter-spacing:.2em;font-size:19px;margin:0">墓地</h2>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--dim)" id="gxCount"></div>
+  <div class="cg gxList" id="gxList"></div>
+  <button id="bGx">閉じる</button>
 </div></div>
 <div class="cx hidden" id="dx"><div class="in">
   <h2 style="font-family:var(--mincho);letter-spacing:.2em;font-size:19px;margin:0">編　成　（検証用）</h2>
@@ -514,14 +542,18 @@ const STARTERS=[["獣族","群れをなす野の獣たち。数の力で敵を�
 ["天界族","天上に座する聖なる眷属。死者すら再び呼び戻す"],
 ["不死族","墓所より甦る亡者たち。滅んでもなお立ち上がる"],
 ["植物族","大地に根差す精霊たち。芽吹きは尽きることなし"]];
-const FLOORS=5,MAXLIFE=24,OPPLIFE=[14,16,18,20,28];
+const FLOORS=5,MAXLIFE=24,WINLIFE=2,OPPLIFE=[14,16,18,20,28];
+const maxLife=()=>(R&&R.max)||MAXLIFE; // 勝つごとに増える
+// 回復: 上限までしか増えないが、デバッグで上限を超えている分は削らない
+const healTo=(cur,amt,cap)=>Math.max(cur,Math.min(cap,cur+amt));
+const lifeCap=s=>s==="p"?maxLife():oppLife(R.floor);
 // エンドレス: 6戦目以降は1〜5戦目のルールを繰り返し、体力は1戦ごとに+2
 const cyc=fl=>((fl-1)%FLOORS)+1;
 const oppLife=fl=>fl<=FLOORS?OPPLIFE[fl-1]:OPPLIFE[FLOORS-1]+2*(fl-FLOORS);
 const $=i=>document.getElementById(i);
 const sh=a=>{for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a};
 const rnd=a=>a[Math.random()*a.length|0];
-let uid=0,codex={},best=0,bestEnd=0,offer=null,chests=null,csel=null,screen="title",R=null,B=null,pack=null,psel=null,events=[];
+let DEBUG=false,uid=0,codex={},best=0,bestEnd=0,offer=null,chests=null,csel=null,screen="title",R=null,B=null,pack=null,psel=null,events=[];
 const SAVE_KEY="kaidan-janken-save-v1";
 let saveOK=true;
 function saveGame(){
@@ -574,9 +606,10 @@ function scrollable(el,key){
 const inst=b=>({...b,cur:b.p,wear:0,uid:++uid});
 /* ---- 宝箱 ---- */
 const AUTOHEAL=0.3; // 戦闘勝利時の自動回復（最大ライフに対する割合）
-const CHEST={A:{q:"並",n:3,take:2,heal:20,name:"並の箱",note:"3枚から2枚"},
-             B:{q:"稀",n:2,take:1,heal:10,name:"稀の箱",note:"2枚から1枚"},
-             C:{q:"極",n:1,take:1,heal:5, name:"極の箱",note:"この1枚を得る"}};
+const CHEST={A:{q:"並",n:3,own:2,take:2,heal:20,name:"並の箱",note:"3枚から2枚"},
+             B:{q:"稀",n:2,own:1,take:1,heal:10,name:"稀の箱",note:"2枚から1枚"},
+             C:{q:"極",n:1,own:1,take:1,heal:5, name:"極の箱",note:"この1枚を得る"}};
+const OTHER_C=0.2; // 極の箱が他種族になる確率
 // 3箱のうち一番良い箱が何になるかの確率。1戦目の後 → 4戦目の後 を線形に変化
 const CH_FIRST={A:70,B:25,C:5},CH_LAST={A:30,B:40,C:30};
 // 一番良い箱より下の箱が何で埋まるかの重み
@@ -594,15 +627,22 @@ function rollKinds(fl){
 function makeChests(){
   return rollKinds(R.floor).map(k=>{
     const def=CHEST[k];
-    let src=POOL.filter(c=>c.r===R.race&&c.q===def.q);
-    if(!src.length)src=POOL.filter(c=>c.q===def.q);
-    const u=sh(src.slice()),cards=[];
-    for(let i=0;i<def.n;i++)cards.push(u[i]||rnd(src));
+    const own=POOL.filter(c=>c.r===R.race&&c.q===def.q);
+    const oth=POOL.filter(c=>c.r!==R.race&&c.q===def.q);
+    const pick=(a,used)=>{const u=sh(a.filter(c=>!used.has(c.n)));const c=u[0]||rnd(a.length?a:POOL);used.add(c.n);return c};
+    const used=new Set(),cards=[];
+    if(k==="C"){ // 極はほとんど自種族。たまに他種族
+      cards.push(pick(Math.random()<OTHER_C&&oth.length?oth:(own.length?own:oth),used));
+    }else{
+      for(let i=0;i<def.own;i++)cards.push(pick(own.length?own:oth,used));
+      for(let i=0;i<def.n-def.own;i++)cards.push(pick(oth.length?oth:own,used));
+      sh(cards);
+    }
     cards.forEach(see);
     return {k,cards};
   });
 }
-const see=b=>{codex[b.n]=(codex[b.n]||0)+1;saveGame();};
+const see=b=>{if(DEBUG)return;codex[b.n]=(codex[b.n]||0)+1;saveGame();};
 
 /* ---- 編成（検証用）: 任意の構成でランを開始 ---- */
 let TESTDECK=[];
@@ -610,7 +650,7 @@ function startCustomRun(){
   if(!TESTDECK.length)return;
   const deck=TESTDECK.slice();
   deck.forEach(see);
-  R={race:"編成",deck,life:MAXLIFE,floor:1};
+  R={race:"編成",deck,life:MAXLIFE,max:MAXLIFE,floor:1,dbg:DEBUG};
   $("dx").classList.add("hidden");
   startBattle();
 }
@@ -635,7 +675,7 @@ function startRun(race){
   const other=POOL.filter(c=>c.r!==race&&(c.q==="並"||c.q==="稀"));
   for(let i=0;i<2;i++)deck.push(rnd(other));
   deck.forEach(see);
-  R={race,deck,life:MAXLIFE,floor:1,endless:false};
+  R={race,deck,life:MAXLIFE,max:MAXLIFE,floor:1,endless:false,dbg:DEBUG};
   startBattle();
 }
 function oppDeck(fl){
@@ -677,7 +717,7 @@ function onWin(s,c){
   const f=s==="p"?"o":"p",k=EFF[c.e];
   if(k==="draw1")draw(s,1);
   if(k==="draw2")draw(s,2);
-  if(k==="heal3"){const b=B[s].life;B[s].life=Math.min(MAXLIFE,B[s].life+3);
+  if(k==="heal3"){const b=B[s].life;B[s].life=healTo(B[s].life,3,lifeCap(s));
     fx(s,B[s].life-b,"hl");say(`${c.n} ライフ+3`)}
   if(k==="dmg2"){B[f].life-=2;fx(f,2);say(`${c.n} 追加2点`,"hit")}
   if(k==="revive"){const g=B[s].grave;if(g.length){B[s].hand.push(g.pop());say(`${c.n} 墓地から1枚`)}}
@@ -743,7 +783,7 @@ const take=(s,u)=>{const d=B[s],i=d.hand.findIndex(c=>c.uid===u);return d.hand.s
 const payC=(s,ids)=>{
   ids.forEach(u=>{
     const c=take(s,u);
-    if(EFF[c.e]==="sac2"){const b=B[s].life;B[s].life=Math.min(MAXLIFE,B[s].life+2);
+    if(EFF[c.e]==="sac2"){const b=B[s].life;B[s].life=healTo(B[s].life,2,lifeCap(s));
       fx(s,B[s].life-b,"hl");say(`${c.n} を破棄 ライフ+2`);}
     toGrave(s,c);
   });
@@ -763,11 +803,12 @@ function end(){
   B.busy=true;
   const win=B.o.life<=0;
   finisher(win, ()=>{
-    if(!win){if(R.endless)bestEnd=Math.max(bestEnd,R.floor);else best=Math.max(best,R.floor);
-      saveGame();screen="over";render();return}
+    if(!win){if(!R.dbg){if(R.endless)bestEnd=Math.max(bestEnd,R.floor);else best=Math.max(best,R.floor);
+      saveGame();}screen="over";render();return}
     R.life=B.p.life;
-    if(R.floor===FLOORS&&!R.endless){best=FLOORS;saveGame();screen="clear";render();return}
-    R.heal=Math.min(MAXLIFE,R.life+Math.ceil(MAXLIFE*AUTOHEAL))-R.life;
+    R.max+=WINLIFE;R.maxUp=WINLIFE;
+    if(R.floor===FLOORS&&!R.endless){if(!R.dbg){best=FLOORS;saveGame();}screen="clear";render();return}
+    R.heal=healTo(R.life,Math.ceil(R.max*AUTOHEAL),R.max)-R.life;
     R.life+=R.heal;
     chests=makeChests();csel=null;psel=null;screen="loot";render();
   });
@@ -826,16 +867,46 @@ const able=c=>B.p.hand.filter(x=>x.uid!==c.uid).length>=cost("p",c);
 const canOpen=s=>B[s].hand.some(c=>B[s].hand.length-1>=cost(s,c));
 const stuck=()=>!B.field&&!canOpen("p");
 
+/* ---- デバッグ ---- */
+function dbgLife(s){
+  return `<div class="dbgRow"><span>体力</span>${[-5,-1,1,5].map(v=>
+    `<button class="dbgBtn" data-s="${s}" data-v="${v}" ${B.busy?"disabled":""}>${v>0?"+":"−"}${Math.abs(v)}</button>`).join("")}</div>`;
+}
+const ohChip=c=>{const k=Math.min(1,26/Math.max(c.w,c.ht));
+  return `<div class="oh" title="${c.n}"><img class="ohArt" src="${c.img}" style="width:${c.w*k}px;height:${c.ht*k}px">
+    <div class="ohTx"><i>${c.n}</i><small><img src="${ICON[c.h]}">${c.cur}${c.c?` 費${c.c}`:""}</small></div></div>`};
+function setDebug(on){
+  DEBUG=on;
+  if(DEBUG&&R)R.dbg=true;
+  $("bDbg").classList.toggle("on",DEBUG);
+  render();
+}
+/* ---- 墓地の一覧 ---- */
+let graveOpen=null;
+function openGrave(s){graveOpen=s;fillGrave();$("gx").classList.remove("hidden")}
+function fillGrave(){
+  if(!B||!graveOpen)return;
+  const s=graveOpen,g=B[s].grave;
+  $("gxTitle").textContent=s==="p"?"自分の墓地":"相手の墓地";
+  $("gxCount").textContent=`${g.length}枚　新しく入った順`;
+  $("gxList").innerHTML=g.length?g.slice().reverse().map(c=>{
+    const d=(c.cur??c.p)-c.p;
+    const pw=d?`<b class="${d>0?"up":"down"}">力${c.cur}（${d>0?"+":""}${d}）</b>`:`力${c.p}`;
+    return `<div class="ce"><img src="${c.img}" style="width:${c.w*.5}px;height:${c.ht*.5}px">
+      <div>${c.n}<small><img class="hi" src="${ICON[c.h]}">${pw}・費${c.c}</small><small class="ge">${c.e!=="なし"?effTag(c.e):""}</small></div></div>`;
+  }).join(""):`<div class="ce lk">まだ何もない</div>`;
+}
 function render(){const b=$("body");
  if(screen==="title"){
   if(!offer)offer=sh(STARTERS.slice()).slice(0,6);
   b.innerHTML=`<div class="screen title-scr"><h2>召　喚　術　選　択</h2>
    <p>選んだ種族の8枚に、<br>他種族の2枚を加えた10枚で始まります。<br>5戦勝ち抜けば踏破。負ければそこで終わり。</p>
    <div class="picks grid2">${offer.map(([r,d])=>`<button class="fp" data-r="${r}"><b>${r}</b><small>${d}</small></button>`).join("")}</div>
-   ${best?`<p style="font-family:var(--mono)">最高到達 ${best} 階${bestEnd?` / エンドレス最高 ${bestEnd} 戦目`:""}</p>`:""}</div>`;
+   ${best?`<p style="font-family:var(--mono)">最高到達 ${best} 階${bestEnd?` / エンドレス最高 ${bestEnd} 戦目`:""}</p>`:""}
+   ${DEBUG?`<p class="dbgNote">デバッグ中：記録と図鑑は残りません</p>`:""}</div>`;
   [...b.querySelectorAll(".fp")].forEach(e=>e.onclick=()=>startRun(e.dataset.r));return}
  if(screen==="loot"&&csel===null){
-  const heal=R.heal?`<p style="color:#8fe08a;font-size:11px">戦闘に勝利 ライフ +${R.heal} 回復</p>`:"";
+  const heal=`<p style="color:#8fe08a;font-size:11px">戦闘に勝利 最大ライフ +${R.maxUp||0}${R.heal?` / ライフ +${R.heal} 回復`:""}</p>`;
   b.innerHTML=`<div class="screen">${track()}<h2>宝　箱</h2>${heal}
    <p>ひとつ選んで開けてください。</p>
    <div class="chests">${chests.map((ch,i)=>{const d=CHEST[ch.k];
@@ -845,7 +916,7 @@ function render(){const b=$("body");
         return `<div class="mini"><div class="mArt"><img src="${c.img}" style="width:${c.w*s}px;height:${c.ht*s}px"></div>
          <div class="mTx"><i>${c.n}</i><small><img src="${ICON[c.h]}">力${c.p}・費${c.c}</small></div></div>`}).join("")}</div>
      </button>`}).join("")}</div>
-   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${MAXLIFE}</p></div>`;
+   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${R.max}</p></div>`;
   [...b.querySelectorAll(".chest")].forEach(e=>e.onclick=()=>{csel=+e.dataset.i;psel=null;SCROLL.pack=0;render()});
   return}
  if(screen==="loot"){
@@ -856,7 +927,7 @@ function render(){const b=$("body");
    <div class="pack">${ch.cards.map((c,i)=>cardHTML({...c,i},psel.includes(i)?"sel":"")).join("")}</div>
    <div class="ctrl"><button class="go" id="bT" ${psel.length===take?"":"disabled"}>受け取る</button></div>
    <div class="skips"><button id="bBack">箱を選び直す</button></div>
-   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${MAXLIFE}</p></div>`;
+   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${R.max}</p></div>`;
   scrollable(b.querySelector(".pack"),"pack");
   [...b.querySelectorAll(".pack .card")].forEach(e=>e.onclick=()=>{if(dragged)return;
     const i=+e.dataset.i,j=psel.indexOf(i);
@@ -864,7 +935,7 @@ function render(){const b=$("body");
     else{if(psel.length>=take)psel.shift();psel.push(i)}
     render()});
   $("bT").onclick=()=>{psel.slice().sort((a,b)=>a-b).forEach(i=>R.deck.push(ch.cards[i]));
-    R.life=Math.min(MAXLIFE,R.life+d.heal);
+    R.life=healTo(R.life,d.heal,R.max);
     chests=null;csel=null;psel=null;R.floor++;startBattle()};
   $("bBack").onclick=()=>{csel=null;psel=null;render()};return}
  if(screen==="event"){
@@ -874,10 +945,10 @@ function render(){const b=$("body");
   b.innerHTML=`<div class="screen">${track()}<h2>道　中</h2>
    <p>次の階層へ進む前に、ひとつ選べます。</p>
    <div class="picks">${events.map(k=>`<button class="fp" data-k="${k}"><b>${EV[k][0]}</b><small>${EV[k][1]}</small></button>`).join("")}</div>
-   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${MAXLIFE}</p></div>`;
+   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${R.max}</p></div>`;
   [...b.querySelectorAll(".fp")].forEach(e=>e.onclick=()=>{
     const k=e.dataset.k;
-    if(k==="rest"){R.life=MAXLIFE;R.floor++;startBattle();}
+    if(k==="rest"){R.life=R.max;R.floor++;startBattle();}
     else if(k==="cull"){if(R.deck.length>6){psel=null;screen="remove";render()}else{R.floor++;startBattle()}}
     else{ // shop: 5枚提示から1枚もらう（図鑑にも5枚記録）
       pack=Array.from({length:5},()=>rnd(POOL));pack.forEach(see);psel=null;screen="shop";render();
@@ -889,7 +960,7 @@ function render(){const b=$("body");
    <div class="pack">${pack.map((c,i)=>cardHTML({...c,i},psel===i?"sel":"")).join("")}</div>
    <div class="ctrl"><button class="go" id="bT" ${psel===null?"disabled":""}>デッキに加える</button></div>
    <div class="skips"><button id="bSkip">何ももらわず進む</button></div>
-   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${MAXLIFE}</p></div>`;
+   <p style="font-family:var(--mono);font-size:10px">デッキ ${R.deck.length}枚 / ライフ ${R.life} / ${R.max}</p></div>`;
   scrollable(b.querySelector(".pack"),"pack");
   [...b.querySelectorAll(".pack .card")].forEach(e=>e.onclick=()=>{if(!dragged){psel=+e.dataset.i;render()}});
   $("bT").onclick=()=>{R.deck.push(pack[psel]);R.floor++;startBattle()};
@@ -910,6 +981,7 @@ function render(){const b=$("body");
    <div class="stat"><span>${R.endless?"エンドレス 到達":"到達階層"}</span><b>${R.endless?R.floor+" 戦目":R.floor+" / "+FLOORS}</b></div>
    ${R.endless?`<div class="stat"><span>エンドレス 最高</span><b>${bestEnd} 戦目</b></div>`:""}
    <div class="stat"><span>召喚術</span><b>${R.race}</b></div>
+   ${R.dbg?`<div class="stat"><span>デバッグ</span><b>記録なし</b></div>`:""}
    <div class="stat"><span>最終デッキ</span><b>${R.deck.length} 枚</b></div>
    <div class="stat"><span>この戦闘のターン数</span><b>${s.turn}</b></div>
    <div class="stat"><span>あいこ発生率</span><b>${s.turn?Math.round(s.aiko/s.turn*100):0} %</b></div>
@@ -920,16 +992,17 @@ function render(){const b=$("body");
    <div class="skips"><button id="bA">ここで終える</button></div>`
    :`<div class="ctrl"><button class="go" id="bA">もう一度</button></div>`}</div>`;
   $("bA").onclick=()=>{screen="title";render()};
-  if($("bE"))$("bE").onclick=()=>{R.endless=true;bestEnd=Math.max(bestEnd,FLOORS);saveGame();
-    R.heal=Math.min(MAXLIFE,R.life+Math.ceil(MAXLIFE*AUTOHEAL))-R.life;R.life+=R.heal;
+  if($("bE"))$("bE").onclick=()=>{R.endless=true;if(!R.dbg){bestEnd=Math.max(bestEnd,FLOORS);saveGame();}
+    R.heal=healTo(R.life,Math.ceil(R.max*AUTOHEAL),R.max)-R.life;R.life+=R.heal;
     chests=makeChests();csel=null;psel=null;screen="loot";render()};
   return}
  const f=B.field,can=!B.busy&&(!f||f.owner==="o"),sel=B.p.hand.find(c=>c.uid===B.sel);
  b.innerHTML=`${track()}
   <div class="side" id="sdO"><div class="lifeRow"><span class="who">相手</span>
-   <span class="bar op"><i style="transform:scaleX(${Math.max(0,B.o.life)/oppLife(R.floor)})"></i></span>
+   <span class="bar op"><i style="transform:scaleX(${Math.min(1,Math.max(0,B.o.life)/oppLife(R.floor))})"></i></span>
    <span class="num">${Math.max(0,B.o.life)}</span></div>
-   <div class="meta">手札 ${B.o.hand.length} / 山 ${B.o.deck.length} / 墓 ${B.o.grave.length}</div></div>
+   <div class="meta">手札 ${B.o.hand.length} / 山 ${B.o.deck.length} / <button class="gvBtn" data-g="o">墓 ${B.o.grave.length}</button></div>
+   ${DEBUG?dbgLife("o")+`<div class="dbgHand">${B.o.hand.length?B.o.hand.map(ohChip).join(""):'<span class="dbgNone">手札なし</span>'}</div>`:""}</div>
   <div class="field ornate">
    <span class="fl">${B.show?"決　着":(f?(f.owner==="p"?"自分が場を制圧中":"相手が場を制圧中"):"場")}</span>
    <span class="st">${!B.show&&f?f.card.wear+"連勝":""}</span>
@@ -942,9 +1015,10 @@ function render(){const b=$("body");
    ${B.toast?`<span class="toast">${B.toast}</span>`:""}</div>
   <div class="log" id="logBox">${B.log.join("<br>")}</div>
   <div class="side" id="sdP"><div class="lifeRow"><span class="who">自分</span>
-   <span class="bar me"><i style="transform:scaleX(${Math.max(0,B.p.life)/MAXLIFE})"></i></span>
-   <span class="num">${Math.max(0,B.p.life)}/${MAXLIFE}</span></div>
-   <div class="meta">手札 ${B.p.hand.length} / 山 ${B.p.deck.length} / 墓 ${B.p.grave.length}${B.p.disc?' / <span class="discOn">コスト-1 発動中</span>':""}${B.p.rally?` / <span class="rallyOn">鼓舞 パワー+${B.p.rally} 発動中</span>`:""}</div></div>
+   <span class="bar me"><i style="transform:scaleX(${Math.min(1,Math.max(0,B.p.life)/maxLife())})"></i></span>
+   <span class="num">${Math.max(0,B.p.life)}/${maxLife()}</span></div>
+   <div class="meta">手札 ${B.p.hand.length} / 山 ${B.p.deck.length} / <button class="gvBtn" data-g="p">墓 ${B.p.grave.length}</button>${B.p.disc?' / <span class="discOn">コスト-1 発動中</span>':""}${B.p.rally?` / <span class="rallyOn">鼓舞 パワー+${B.p.rally} 発動中</span>`:""}</div>
+   ${DEBUG?dbgLife("p"):""}</div>
   <div class="handRow">${B.p.hand.map(c=>cardHTML(c,
     B.sel===c.uid?"sel":B.pay.includes(c.uid)?"pay":(can&&!able(c))?"dead":"")).join("")}</div>
   <div class="hint">${!can?"相手の手番":stuck()?"出せる札がない。1枚引いて立て直す":!f?"1枚選んで召喚。コストは他の手札で払う":
@@ -958,6 +1032,12 @@ function render(){const b=$("body");
  if(B.toast)setTimeout(()=>{B.toast=null},0);
  if(B.beamP||B.beamO)setTimeout(()=>{B.beamP=false;B.beamO=false},0);
  $("bP").onclick=play;
+ [...b.querySelectorAll(".gvBtn")].forEach(e=>e.onclick=()=>openGrave(e.dataset.g));
+ [...b.querySelectorAll(".dbgBtn")].forEach(e=>e.onclick=()=>{
+   if(!B||B.busy)return;
+   B[e.dataset.s].life+=+e.dataset.v;
+   if(end())return;render();});
+ if(graveOpen)fillGrave();
  $("bD").onclick=()=>{
    B.sel=null;B.pay=[];
    if(!B.field){
@@ -1057,6 +1137,8 @@ $("bImport").onclick=()=>{
   ta.setAttribute("readonly","");
 };
 $("bX").onclick=()=>$("cx").classList.add("hidden");
+$("bGx").onclick=()=>{graveOpen=null;$("gx").classList.add("hidden")};
+$("bDbg").onclick=()=>setDebug(!DEBUG);
 
 /* ---- 編成（検証用）UI ---- */
 let dkRace="全", dkFind="";
