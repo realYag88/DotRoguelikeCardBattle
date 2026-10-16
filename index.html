@@ -903,7 +903,8 @@ function render(){const b=$("body");
    <p>選んだ種族の8枚に、<br>他種族の2枚を加えた10枚で始まります。<br>5戦勝ち抜けば踏破。負ければそこで終わり。</p>
    <div class="picks grid2">${offer.map(([r,d])=>`<button class="fp" data-r="${r}"><b>${r}</b><small>${d}</small></button>`).join("")}</div>
    ${best?`<p style="font-family:var(--mono)">最高到達 ${best} 階${bestEnd?` / エンドレス最高 ${bestEnd} 戦目`:""}</p>`:""}
-   ${DEBUG?`<p class="dbgNote">デバッグ中：記録と図鑑は残りません</p>`:""}</div>`;
+   ${DEBUG?`<p class="dbgNote">デバッグ中：記録と図鑑は残りません</p>`:""}
+   <p style="font-size:10px;opacity:.6;margin-top:14px">ドット絵素材：<a href="http://rpgdot3319.g1.xrea.com/" target="_blank" rel="noopener" style="color:inherit">Rド</a> 様</p></div>`;
   [...b.querySelectorAll(".fp")].forEach(e=>e.onclick=()=>startRun(e.dataset.r));return}
  if(screen==="loot"&&csel===null){
   const heal=`<p style="color:#8fe08a;font-size:11px">戦闘に勝利 最大ライフ +${R.maxUp||0}${R.heal?` / ライフ +${R.heal} 回復`:""}</p>`;
